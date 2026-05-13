@@ -22,7 +22,7 @@ def autoUpdate():
     while True:
         print(f'[autoupdate/{autoupdInterval}s] Updating cards..')
         try:
-            requests.get('http://127.0.0.1:1488/sync')
+            requests.get('http://127.0.0.1:1401/sync')
         except requests.ConnectionError:
             pass
         time.sleep(autoupdInterval)
@@ -225,4 +225,4 @@ if __name__ == '__main__':
         autoupdThread.daemon = True
         autoupdThread.start()
 
-    app.run(debug=True, port=1488)
+    app.run(debug=True, port=1401)

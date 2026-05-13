@@ -31,7 +31,7 @@ Dependencies explained:
 python localchub.py
 ```
 
-Then open **http://127.0.0.1:1488** in your browser.
+Then open **http://127.0.0.1:1401** in your browser.
 
 The first time you open it, the page will be empty. Enter a chub.ai author name in the text field (e.g. `NG`) and click **Update cards** to start downloading.
 
@@ -63,7 +63,7 @@ Each card is saved as two files:
 
 ### The web server
 
-Flask serves a single-page UI on port 1488. The frontend is vanilla HTML/CSS/JavaScript (no build tools). When you click "Update cards", it opens a Server-Sent Events (SSE) connection to `/sync`, which streams progress updates as cards download.
+Flask serves a single-page UI on port 1401. The frontend is vanilla HTML/CSS/JavaScript (no build tools). When you click "Update cards", it opens a Server-Sent Events (SSE) connection to `/sync`, which streams progress updates as cards download.
 
 ## What was Changed from the Original Version
 
