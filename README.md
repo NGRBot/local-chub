@@ -1,0 +1,71 @@
+# Local Chub
+
+A self-hosted web app for browsing and downloading AI character cards from [chub.ai](https://chub.ai). Character cards are PNG images with embedded JSON data — the standard format used by [SillyTavern](https://sillytavern.com) and other AI chat backends.
+
+## What it does
+
+- **Sync cards by author** — Enter a chub.ai username and pull down all their character cards (PNG + metadata)
+- **Browse locally** — View all your downloaded cards in a paginated grid, with search/filter by name, tag, author, or title
+- **Manage cards** — Delete cards, edit tags, view full character details in a lightbox, copy raw JSON, and download individual card images
+
+## Requirements
+
+- **Python 3.10+** with pip
+
+## Installation
+
+```bash
+# Install dependencies
+pip install flask requests Pillow
+```
+
+Dependencies explained:
+- **Flask** — runs the local web server
+- **requests** — talks to the chub.ai API to download cards
+- **Pillow** — checks downloaded images are valid PNGs
+
+## Running
+
+```bash
+# Start the server
+python localchub.py
+```
+
+Then open **http://127.0.0.1:1488** in your browser.
+
+The first time you open it, the page will be empty. Enter a chub.ai author name in the text field (e.g. `NG`) and click **Update cards** to start downloading.
+
+### Command-line flags
+
+| Flag | Description |
+|------|-------------|
+| `--autoupdate` | Re-sync every 60 seconds (or specify seconds, e.g. `--autoupdate 120`) |
+| `--synctags` | Update local card tags when they change on chub.ai |
+| `--backup` | Back up old versions of updated cards into a `backup/` directory |
+
+Example:
+```bash
+python localchub.py --autoupdate 300 --synctags
+```
+
+## How it works
+
+### The API
+
+Chub.ai exposes a search endpoint at `https://api.chub.ai/search`. It accepts a `username` parameter to filter by creator, along with parameters like `sort`, `nsfw`, `first`, `page`, etc. Local Chub hits this endpoint, downloads the card metadata (JSON) and card image (PNG) for each result, and stores them in a `static/` folder.
+
+### Card storage
+
+Each card is saved as two files:
+
+- `static/{id}.png` — The card image with embedded character data (SillyTavern "chara card" format)
+- `static/{id}.json` — The API metadata (name, author path, topics/tags, timestamps)
+
+### The web server
+
+Flask serves a single-page UI on port 1488. The frontend is vanilla HTML/CSS/JavaScript (no build tools). When you click "Update cards", it opens a Server-Sent Events (SSE) connection to `/sync`, which streams progress updates as cards download.
+
+## What was fixed
+
+- **Empty state crash** — The original code crashed on `random.choices()` when no cards were downloaded yet (empty tag set). Fixed by checking for an empty set before sampling.
+- **Author-only syncing** — Originally, "Update cards" scraped the entire chub.ai front page (~500 cards). Changed to require an author name, using chub.ai's `username` API filter.

@@ -473,6 +473,8 @@
     </div>
 
     <div>
+        <label for='authorInput'>Author:</label>
+        <input type='text' id='authorInput' placeholder='e.g. NG' style='font-size: 18px; padding: 5px;'>
         <button class='download-btn' onclick='syncCards();scrollToBottom()'>Update cards</button>
     </div>
 
@@ -659,7 +661,12 @@
         function syncCards() {
             updProgress(0, '', 0);
 
-            const eventSource = new EventSource('/sync');
+            const author = document.getElementById('authorInput').value.trim();
+            if (!author) {
+                alert('Please enter an author name.');
+                return;
+            }
+            const eventSource = new EventSource('/sync?author=' + encodeURIComponent(author));
             eventSource.onmessage = function(event) {
                 const response = JSON.parse(event.data);
                 const progress = response.progress;

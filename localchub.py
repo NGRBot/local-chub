@@ -95,7 +95,10 @@ def getCardList(page, query=None, searchType='basic'):
                 randomTags.update(metadata['topics'])
                 cards.append(createCardEntry(metadata))
 
-    randomTags = random.choices(list(randomTags), k=10) # randomTags = random.sample(list(randomTags), min(10, len(randomTags)))
+    if randomTags:
+        randomTags = random.sample(list(randomTags), min(10, len(randomTags)))
+    else:
+        randomTags = []
     return cards, count, randomTags
 
 def blacklistAdd(cardId):
@@ -135,6 +138,10 @@ def index():
 
 @app.route('/sync', methods=['GET'])
 def syncCards():
+    author = request.args.get('author', '').strip()
+    if not author:
+        return Response("data: {\"error\": \"Author name is required\"}\n\n", content_type='text/event-stream')
+
     totalCards, currCard, newCards = int(request.args.get('c', 500)), 0, 0
     cardIds = sorted([int(file.split('.')[0]) for file in os.listdir('static') if file.lower().endswith('.png')], reverse=True)
 
@@ -177,7 +184,7 @@ def syncCards():
     def genSyncData():
         nonlocal totalCards
         page = 1
-        r = requests.get('https://api.chub.ai/search', params={'first': totalCards, 'page': f'{page}', 'sort': 'last_activity_at', 'venus': 'false', 'asc': 'false', 'nsfw': 'true', 'min_tokens': '50'}, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'}).json()
+        r = requests.get('https://api.chub.ai/search', params={'first': totalCards, 'page': f'{page}', 'sort': 'last_activity_at', 'venus': 'false', 'asc': 'false', 'nsfw': 'true', 'min_tokens': '50', 'username': author}, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'}).json()
         cards = r['data']['nodes']
         for card in cards:
             yield f"data: {json.dumps({'progress': round((currCard / len(cards)) * 100, 2), 'currCard': card['name'], 'newCards': newCards})}\n\n"
