@@ -65,7 +65,7 @@ Each card is saved as two files:
 
 Flask serves a single-page UI on port 1488. The frontend is vanilla HTML/CSS/JavaScript (no build tools). When you click "Update cards", it opens a Server-Sent Events (SSE) connection to `/sync`, which streams progress updates as cards download.
 
-## What was fixed
+## What was Changed from the Original Version
 
 - **Empty state crash** — The original code crashed on `random.choices()` when no cards were downloaded yet (empty tag set). Fixed by checking for an empty set before sampling.
-- **Author-only syncing** — Originally, "Update cards" scraped the entire chub.ai front page (~500 cards). Changed to require an author name, using chub.ai's `username` API filter.
+- **Author-only syncing** — Originally, "Update cards" scraped the entire chub.ai front page. Changed to require an author name, using chub.ai's `username` API filter.
