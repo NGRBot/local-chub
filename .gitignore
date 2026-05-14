@@ -1,0 +1,7 @@
+.claude/
+static/*.png
+static/*.json
+backup/
+blacklist.txt
+__pycache__/
+*.pyc
