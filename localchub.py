@@ -170,12 +170,17 @@ def syncCards():
         if cardId not in cardIds:
             with open(f'static/{cardId}.json', 'w', encoding='utf-8') as f:
                 f.write(json.dumps(card, indent=4))
+            resp = requests.get(card['max_res_url'])
+            if resp.status_code != 200:
+                print(f'Failed to download image for {card["name"]} ({cardId}) - HTTP {resp.status_code}')
+                os.remove(f'static/{cardId}.json')
+                return False
             with open(f'static/{cardId}.png', 'wb') as f:
-                f.write(requests.get(f'https://avatars.charhub.io/avatars/{card["fullPath"]}/chara_card_v2.png').content)
+                f.write(resp.content)
                 print(f'{pTask} {card["name"]} ({cardId})..')
             if not pngCheck(cardId):
                 deleteCard(cardId)
-                blacklistAdd(cardId)
+                print(f'Invalid image for {card["name"]} ({cardId}) - not a valid PNG, skipping')
                 return False
             newCards += 1
         currCard += 1

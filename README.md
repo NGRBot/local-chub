@@ -69,3 +69,7 @@ Flask serves a single-page UI on port 1401. The frontend is vanilla HTML/CSS/Jav
 
 - **Empty state crash** — The original code crashed on `random.choices()` when no cards were downloaded yet (empty tag set). Fixed by checking for an empty set before sampling.
 - **Author-only syncing** — Originally, "Update cards" scraped the entire chub.ai front page. Changed to require an author name, using chub.ai's `username` API filter.
+- **Avatar download URL mismatch** — The avatar download URL was constructed from `card['fullPath']`, but chub.ai's CDN uses a different path (e.g. `Horny_Imp_SC` vs `Horny_Imp`) for some cards, causing 404s. Changed to use `max_res_url` from the API response, which always provides the correct URL.
+- **Automatic blacklisting on download failure** — When a card's image failed to download or validate, its ID was permanently written to `blacklist.txt`, excluding it from future syncs. Changed to log the error and skip instead, so transient failures don't permanently hide cards.
+- **HTTP status check for image downloads** — Added a 200 status check before writing downloaded content to a PNG file, preventing error-page HTML from being saved as a card image.
+- **Crash when image download fails before the PNG is written** — `deleteCard()` tried to remove both `.json` and `.png` files during cleanup, but only `.json` existed if the HTTP request failed. Changed to remove only the `.json` in that case.
