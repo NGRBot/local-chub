@@ -690,25 +690,35 @@
                         html += `<h2>Name:</h2> <input type="text" class="edit-field name-field" data-field="name" data-type="string" value="${escapeHtml(String(data.data.name))}"><br>`;
                     }
 
-                    const skipFields = ['avatar', 'name', 'character_version', 'creator', 'extensions'];
+                    const skipFields = ['avatar', 'name', 'character_version', 'creator', 'extensions', 'character_book'];
+                    let alternateGreetingsHtml = '';
+
                     for (const [key, value] of Object.entries(data.data)) {
                         if (!isNonEmpty(value)) continue;
                         if (skipFields.includes(key)) continue;
 
                         const label = formatLabel(key);
 
-                        if (key === 'character_book') {
-                            html += `<h2>${label}:</h2> <pre class="readonly-field">${escapeHtml(JSON.stringify(value, null, 2))}</pre><br>`;
-                        } else if (key === 'tags') {
+                        if (key === 'tags') {
                             const csvValue = Array.isArray(value) ? value.join(', ') : String(value);
                             html += `<h2>${label}:</h2> <input type="text" class="edit-field" data-field="tags" data-type="csv" value="${escapeHtml(csvValue)}"><br>`;
                         } else if (key === 'alternate_greetings' && Array.isArray(value)) {
-                            value.forEach((greeting, i) => {
-                                html += `<h2>${label} #${i + 1}:</h2> <textarea class="edit-field" data-field="alternate_greetings" data-type="array-item">${escapeHtml(greeting)}</textarea><br>`;
-                            });
+                            alternateGreetingsHtml = value.map((greeting, i) => {
+                                return `<h2>${label} #${i + 1}:</h2> <textarea class="edit-field" data-field="alternate_greetings" data-type="array-item">${escapeHtml(greeting)}</textarea><br>`;
+                            }).join('');
+                        } else if (key === 'first_mes') {
+                            html += `<h2>${label}:</h2> <textarea class="edit-field" data-field="${key}" data-type="string">${escapeHtml(String(value))}</textarea><br>`;
+                            if (alternateGreetingsHtml) {
+                                html += alternateGreetingsHtml;
+                                alternateGreetingsHtml = '';
+                            }
                         } else {
                             html += `<h2>${label}:</h2> <textarea class="edit-field" data-field="${key}" data-type="string">${escapeHtml(String(value))}</textarea><br>`;
                         }
+                    }
+
+                    if (alternateGreetingsHtml) {
+                        html += alternateGreetingsHtml;
                     }
 
                     html += '<div style="margin-top: 20px;">';
