@@ -1,4 +1,4 @@
-import os, json, base64, requests, re, random, argparse, time, threading, datetime
+import os, json, base64, requests, re, random, argparse, time, threading, datetime, struct, zlib
 from flask import Flask, render_template, request, send_from_directory, jsonify, Response
 from PIL import Image, UnidentifiedImageError
 
@@ -100,6 +100,48 @@ def getCardList(page, query=None, searchType='basic'):
     else:
         randomTags = []
     return cards, count, randomTags
+
+def savePngInfo(cardId, card_data):
+    encoded = base64.b64encode(json.dumps(card_data).encode('utf-8')).decode('ascii')
+
+    with open(f'static/{cardId}.png', 'rb') as f:
+        png_data = f.read()
+
+    signature = png_data[:8]
+    chunks_raw = png_data[8:]
+
+    keyword = b'chara'
+    separator = b'\x00'
+    new_chunk_data_raw = keyword + separator + encoded.encode('latin-1')
+    new_chunk_type = b'tEXt'
+
+    crc_data = new_chunk_type + new_chunk_data_raw
+    new_crc = struct.pack('>I', zlib.crc32(crc_data) & 0xFFFFFFFF)
+
+    result = bytearray(signature)
+    i = 0
+    replaced = False
+    while i < len(chunks_raw):
+        length = struct.unpack('>I', chunks_raw[i:i+4])[0]
+        chunk_type = chunks_raw[i+4:i+8]
+        chunk_data = chunks_raw[i+8:i+8+length]
+
+        if chunk_type == b'tEXt' and chunk_data.startswith(b'chara\x00'):
+            result += struct.pack('>I', len(new_chunk_data_raw))
+            result += new_chunk_type
+            result += new_chunk_data_raw
+            result += new_crc
+            replaced = True
+        else:
+            result += chunks_raw[i:i+12+length]
+
+        i += 12 + length
+
+    if not replaced:
+        raise ValueError('No chara chunk found in PNG')
+
+    with open(f'static/{cardId}.png', 'wb') as f:
+        f.write(result)
 
 def blacklistAdd(cardId):
     if not os.path.exists('blacklist.txt'):
@@ -221,6 +263,26 @@ def edit_tags(cardId):
         with open(f'static/{cardId}.json', 'w', encoding='utf-8') as f:
             json.dump(metadata, f, indent=4)
         return jsonify({'message': 'Tags updated successfully'}), 200
+    except Exception as e:
+        return jsonify({'message': str(e)}), 500
+
+@app.route('/edit_card/<int:cardId>', methods=['POST'])
+def edit_card(cardId):
+    try:
+        updates = request.get_json()
+
+        img = Image.open(f'static/{cardId}.png')
+        card_data = json.loads(base64.b64decode(img.png.im_info['chara']).decode('utf-8'))
+
+        for key, value in updates.items():
+            if key in card_data['data']:
+                card_data['data'][key] = value
+
+        savePngInfo(cardId, card_data)
+
+        return jsonify({'message': 'Card updated successfully'}), 200
+    except FileNotFoundError:
+        return jsonify({'message': 'Card not found'}), 404
     except Exception as e:
         return jsonify({'message': str(e)}), 500
 

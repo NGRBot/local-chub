@@ -205,15 +205,17 @@
             display: flex;
             flex-direction: row;
             justify-content: center;
-            max-width: 80%;
-            max-height: 80%;
+            max-width: 95%;
+            max-height: 95%;
+            width: 95%;
         }
 
         .lightbox-image {
-            max-width: 50%;
+            max-width: 200px;
             max-height: 100%;
             object-fit: contain;
             margin-right: 20px;
+            align-self: flex-start;
         }
 
         .lightbox-description {
@@ -347,6 +349,73 @@
 
         .tag-container p {
             margin: 0;
+        }
+
+        .lightbox-description textarea,
+        .lightbox-description input[type="text"] {
+            width: 100%;
+            background-color: #333;
+            color: #fff;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            box-sizing: border-box;
+            resize: vertical;
+        }
+
+        .lightbox-description textarea {
+            min-height: 160px;
+        }
+
+        .lightbox-description input[type="text"] {
+            min-height: 36px;
+        }
+
+        .lightbox-description .name-field {
+            min-height: 36px;
+            height: 36px;
+            resize: none;
+        }
+
+        .lightbox-description .readonly-field {
+            background-color: #2a2a2a;
+            color: #aaa;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 13px;
+            white-space: pre-wrap;
+            overflow-x: auto;
+        }
+
+        .lightbox-description .save-card-button,
+        .lightbox-description .cancel-card-button {
+            padding: 10px 24px;
+            font-size: 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-top: 10px;
+            margin-right: 10px;
+        }
+
+        .lightbox-description .save-card-button {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        .lightbox-description .cancel-card-button {
+            background-color: #a9a9a9a9;
+            color: white;
+        }
+
+        .lightbox-description .save-card-button:hover {
+            background-color: #45a049;
+        }
+
+        .lightbox-description .cancel-card-button:hover {
+            background-color: #999;
         }
 
     </style>
@@ -597,18 +666,57 @@
             lightboxDescription.innerHTML = '';
 
             function isNonEmpty(value) {
-                return value !== null && value !== '' && value !== undefined && value !== 'none' && value.length > 0;
+                if (value === null || value === '' || value === undefined || value === 'none') return false;
+                if (Array.isArray(value)) return value.length > 0;
+                if (typeof value === 'object') return Object.keys(value).length > 0;
+                return true;
+            }
+
+            function escapeHtml(text) {
+                return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+            }
+
+            function formatLabel(key) {
+                return key.replace(/_/g, ' ').toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
             }
 
             const cardId = imagePath.split('/').pop().split('.').shift();
             fetch(`/get_png_info/${cardId}`)
                 .then(response => response.json())
                 .then(data => {
+                    let html = '';
+
+                    if (data.data.name && isNonEmpty(data.data.name)) {
+                        html += `<h2>Name:</h2> <input type="text" class="edit-field name-field" data-field="name" data-type="string" value="${escapeHtml(String(data.data.name))}"><br>`;
+                    }
+
+                    const skipFields = ['avatar', 'name', 'character_version', 'creator', 'extensions'];
                     for (const [key, value] of Object.entries(data.data)) {
-                        if (isNonEmpty(value)) {
-                            lightboxDescription.innerHTML += `<h2>${key.replace(/_/g, ' ').toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}:</h2> ${value}<br>`;
+                        if (!isNonEmpty(value)) continue;
+                        if (skipFields.includes(key)) continue;
+
+                        const label = formatLabel(key);
+
+                        if (key === 'character_book') {
+                            html += `<h2>${label}:</h2> <pre class="readonly-field">${escapeHtml(JSON.stringify(value, null, 2))}</pre><br>`;
+                        } else if (key === 'tags') {
+                            const csvValue = Array.isArray(value) ? value.join(', ') : String(value);
+                            html += `<h2>${label}:</h2> <input type="text" class="edit-field" data-field="tags" data-type="csv" value="${escapeHtml(csvValue)}"><br>`;
+                        } else if (key === 'alternate_greetings' && Array.isArray(value)) {
+                            value.forEach((greeting, i) => {
+                                html += `<h2>${label} #${i + 1}:</h2> <textarea class="edit-field" data-field="alternate_greetings" data-type="array-item">${escapeHtml(greeting)}</textarea><br>`;
+                            });
+                        } else {
+                            html += `<h2>${label}:</h2> <textarea class="edit-field" data-field="${key}" data-type="string">${escapeHtml(String(value))}</textarea><br>`;
                         }
                     }
+
+                    html += '<div style="margin-top: 20px;">';
+                    html += `<button class="save-card-button" onclick="saveCard('${cardId}')">Save</button>`;
+                    html += '<button class="cancel-card-button" onclick="hideLightbox()">Cancel</button>';
+                    html += '</div>';
+
+                    lightboxDescription.innerHTML = html;
                     lightbox.style.display = 'flex';
                 })
                 .catch(error => {
@@ -818,6 +926,47 @@
         }
 
         applyCompactModePreference();
+
+        function saveCard(cardId) {
+            const updates = {};
+
+            document.querySelectorAll('.edit-field[data-type="string"]').forEach(el => {
+                updates[el.dataset.field] = el.value;
+            });
+
+            document.querySelectorAll('.edit-field[data-type="csv"]').forEach(el => {
+                updates[el.dataset.field] = el.value.split(',').map(t => t.trim()).filter(t => t);
+            });
+
+            const arrayItems = {};
+            document.querySelectorAll('.edit-field[data-type="array-item"]').forEach(el => {
+                if (!arrayItems[el.dataset.field]) arrayItems[el.dataset.field] = [];
+                arrayItems[el.dataset.field].push(el.value);
+            });
+            for (const [key, values] of Object.entries(arrayItems)) {
+                updates[key] = values;
+            }
+
+            fetch(`/edit_card/${cardId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updates),
+            })
+                .then(response => {
+                    if (response.ok) {
+                        alert('Card updated successfully');
+                        hideLightbox();
+                    } else {
+                        return response.json().then(data => {
+                            alert('Error: ' + data.message);
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error saving card:', error);
+                    alert('Error saving card. Please try again.');
+                });
+        }
 
     </script>
 </body>

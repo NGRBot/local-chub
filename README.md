@@ -74,3 +74,19 @@ Flask serves a single-page UI on port 1401. The frontend is vanilla HTML/CSS/Jav
 - **HTTP status check for image downloads** — Added a 200 status check before writing downloaded content to a PNG file, preventing error-page HTML from being saved as a card image.
 - **Crash when image download fails before the PNG is written** — `deleteCard()` tried to remove both `.json` and `.png` files during cleanup, but only `.json` existed if the HTTP request failed. Changed to remove only the `.json` in that case.
 - **Forked cards missing from author syncs** — The chub.ai search API excludes forked cards by default unless `include_forks=true` is passed. Added this parameter so authors who fork their own cards (or have forked variants) don't have missing cards during sync.
+
+### Editing card data
+
+When you open a card in the lightbox (click the image or name), the character data from the embedded V2 card is rendered as editable form controls:
+
+- **Name** — shown at the top; editable textarea
+- **Simple text fields** (description, first message, personality, scenario, creator notes, system prompt, etc.) — textareas
+- **Tags** — comma-separated text input
+- **Alternate greetings** — individual textareas, one per greeting
+- **Character book** — read-only display to prevent accidental corruption
+
+The following fields are present in the card data but are not shown in the editor: `avatar`, `character_version`, `creator`, and `extensions` (they are preserved as-is during save).
+
+Click **Save** at the bottom of the lightbox to write the changes directly into the PNG's embedded `chara` chunk. The image data is preserved exactly — only the metadata chunk is replaced. Click **Cancel** to close without saving.
+
+The spec requires that "optional properties must never be destroyed if already in the data" — hidden or complex fields are preserved as-is during save.
