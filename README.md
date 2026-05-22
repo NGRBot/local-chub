@@ -5,6 +5,7 @@ A self-hosted web app for browsing and downloading AI character cards from [chub
 ## What it does
 
 - **Sync cards by author** — Enter a chub.ai username and pull down all their character cards (PNG + metadata)
+- **Import cards from your machine** — Upload character card PNGs and JSON metadata files from your local computer (see Importing cards)
 - **Browse locally** — View all your downloaded cards in a paginated grid, with search/filter by name, tag, author, or title
 - **Manage cards** — Delete cards, edit tags, view full character details in a lightbox, copy raw JSON, and download individual card images
 
@@ -59,11 +60,26 @@ Chub.ai exposes a search endpoint at `https://api.chub.ai/search`. It accepts a 
 Each card is saved as two files:
 
 - `static/{id}.png` — The card image with embedded character data (SillyTavern "chara card" format)
-- `static/{id}.json` — The API metadata (name, author path, topics/tags, timestamps)
+- `static/{id}.json` — The API metadata (name, author path, topics/tags, timestamps, etc.)
+
+Cards synced from chub.ai use numeric IDs (e.g. `102176.png`). Cards imported from your local machine use the prefix `IMPORT{n}` (e.g. `IMPORT1.png`) to avoid ID conflicts with future chub.ai cards.
 
 ### The web server
 
 Flask serves a single-page UI on port 1401. The frontend is vanilla HTML/CSS/JavaScript (no build tools). When you click "Update cards", it opens a Server-Sent Events (SSE) connection to `/sync`, which streams progress updates as cards download.
+
+## Importing cards
+
+You can also add cards that aren't from chub.ai by importing them from your local machine:
+
+1. Click **Import Cards** near the top of the page to open a file picker
+2. Select one or more `.png` or `.json` files
+
+**PNG import** — The file is validated as a valid SillyTavern V2 character card (must contain the embedded `chara` JSON chunk). If valid, the character data is extracted and both the image and a generated metadata file are saved. PNGs without a `chara` chunk are rejected with "No JSON Data Detected."
+
+**JSON import** — The metadata file is saved with a default grey placeholder image as the card preview. This is useful for importing metadata that was exported separately from the card image.
+
+Imported cards are assigned IDs with the `IMPORT{n}` prefix so they never conflict with chub.ai-synced cards.
 
 ## What was Changed from the Original Version
 
@@ -74,6 +90,7 @@ Flask serves a single-page UI on port 1401. The frontend is vanilla HTML/CSS/Jav
 - **HTTP status check for image downloads** — Added a 200 status check before writing downloaded content to a PNG file, preventing error-page HTML from being saved as a card image.
 - **Crash when image download fails before the PNG is written** — `deleteCard()` tried to remove both `.json` and `.png` files during cleanup, but only `.json` existed if the HTTP request failed. Changed to remove only the `.json` in that case.
 - **Forked cards missing from author syncs** — The chub.ai search API excludes forked cards by default unless `include_forks=true` is passed. Added this parameter so authors who fork their own cards (or have forked variants) don't have missing cards during sync.
+- **Local card import** — Added an "Import Cards" button that lets you upload `.png` and `.json` files from your local machine. PNGs are validated for the SillyTavern V2 `chara` chunk before importing. Imported cards use `IMPORT{n}` IDs to avoid collision with chub.ai's numeric IDs.
 
 ### Editing card data
 

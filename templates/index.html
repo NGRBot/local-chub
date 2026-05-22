@@ -434,6 +434,12 @@
         <button type='submit'>Search</button>
     </form>
 
+    <div style='margin: 10px 0;'>
+        <button class='download-btn' onclick='document.getElementById("importInput").click()'>Import Cards</button>
+        <input type='file' id='importInput' multiple accept='.png,.json' style='display: none;' onchange='importCards(this)'>
+        <span id='importStatus'></span>
+    </div>
+
     {% if search_results %}
         <h2>Search Results ({{ search_results|length }} results)</h2>
     {% else %}
@@ -893,6 +899,53 @@
                             console.error('Failed to copy JSON: ', error);
                         });
                 });
+        }
+
+        function importCards(input) {
+            const files = input.files;
+            if (files.length === 0) return;
+
+            const formData = new FormData();
+            for (const file of files) {
+                formData.append('files', file);
+            }
+
+            const statusEl = document.getElementById('importStatus');
+            statusEl.innerText = 'Importing...';
+            statusEl.style.color = '';
+
+            fetch('/import', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                const results = data.results || [];
+                let successCount = 0;
+                let failMessages = [];
+                results.forEach(r => {
+                    if (r.success) {
+                        successCount++;
+                    } else {
+                        failMessages.push(`${r.filename}: ${r.error}`);
+                    }
+                });
+
+                if (successCount > 0) {
+                    statusEl.innerText = `Imported ${successCount} card(s) successfully!`;
+                    statusEl.style.color = 'green';
+                    setTimeout(() => { window.location.reload(); }, 2000);
+                } else {
+                    statusEl.innerText = 'Import failed: ' + failMessages.join('; ');
+                    statusEl.style.color = 'red';
+                }
+            })
+            .catch(error => {
+                statusEl.innerText = 'Import failed: ' + error;
+                statusEl.style.color = 'red';
+            });
+
+            input.value = '';
         }
 
         function scrollToTop() {

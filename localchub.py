@@ -1,4 +1,4 @@
-import os, json, base64, requests, re, random, argparse, time, threading, datetime, struct, zlib
+import os, json, base64, requests, re, random, argparse, time, threading, datetime, struct, zlib, io
 from flask import Flask, render_template, request, send_from_directory, jsonify, Response
 from PIL import Image, UnidentifiedImageError
 
@@ -63,7 +63,20 @@ def createCardEntry(metadata):
 
 def getCardList(page, query=None, searchType='basic'):
     cards = []
-    cardIds = sorted([int(file.split('.')[0]) for file in os.listdir('static') if file.lower().endswith('.png')], reverse=True)
+    all_names = [f.split('.')[0] for f in os.listdir('static') if f.lower().endswith('.png')]
+
+    def card_sort_key(name):
+        if name.startswith('IMPORT'):
+            try:
+                return (1, -int(name[6:]))
+            except ValueError:
+                return (2, name)
+        try:
+            return (0, -int(name))
+        except ValueError:
+            return (2, name)
+
+    cardIds = sorted(all_names, key=card_sort_key)
     count = len(cardIds)
     randomTags = set()
 
@@ -156,6 +169,101 @@ def blacklistCheck(cardId):
             return cardId in f.read().split('\n')
     return False
 
+def getNextCardId():
+    max_num = 0
+    for f in os.listdir('static'):
+        if not f.lower().endswith('.png'):
+            continue
+        name = f.split('.')[0]
+        if name.startswith('IMPORT'):
+            try:
+                n = int(name[6:])
+                if n > max_num:
+                    max_num = n
+            except ValueError:
+                continue
+    return f'IMPORT{max_num + 1}'
+
+def generateGreyPlaceholder(cardId):
+    img = Image.new('RGB', CARD_PREVIEW_SIZE, color=(169, 169, 169))
+    img.save(f'static/{cardId}.png')
+
+@app.route('/import', methods=['POST'])
+def import_cards():
+    files = request.files.getlist('files')
+    if not files:
+        return jsonify({'success': False, 'error': 'No files provided'}), 400
+
+    results = []
+
+    for file in files:
+        if file.filename.lower().endswith('.png'):
+            temp_data = file.read()
+
+            try:
+                img = Image.open(io.BytesIO(temp_data))
+                chara_b64 = img.png.im_info['chara']
+                chara_data = json.loads(base64.b64decode(chara_b64).decode('utf-8'))
+            except (KeyError, Exception):
+                results.append({'success': False, 'filename': file.filename, 'error': 'No JSON Data Detected'})
+                continue
+
+            card_id = getNextCardId()
+
+            with open(f'static/{card_id}.png', 'wb') as f:
+                f.write(temp_data)
+
+            data = chara_data.get('data', {})
+            name = data.get('name', os.path.splitext(file.filename)[0])
+            description = data.get('description', '')
+            tags = data.get('tags', ['IMPORTED'])
+
+            metadata = {
+                'id': card_id,
+                'name': name,
+                'fullPath': f'imported/{name.lower().replace(" ", "-")}',
+                'description': description,
+                'tagline': description[:100] if description else '',
+                'topics': tags,
+                'nTokens': 0,
+                'lastActivityAt': datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                'imported': True
+            }
+
+            with open(f'static/{card_id}.json', 'w', encoding='utf-8') as f:
+                json.dump(metadata, f, indent=4)
+
+            results.append({'success': True, 'filename': file.filename, 'cardId': card_id, 'type': 'png'})
+
+        elif file.filename.lower().endswith('.json'):
+            try:
+                metadata = json.load(file)
+            except Exception:
+                results.append({'success': False, 'filename': file.filename, 'error': 'Invalid JSON'})
+                continue
+
+            card_id = getNextCardId()
+            metadata['id'] = card_id
+            metadata['imported'] = True
+
+            name = os.path.splitext(file.filename)[0]
+            metadata.setdefault('name', name)
+            metadata.setdefault('fullPath', f'imported/{name.lower().replace(" ", "-")}')
+            metadata.setdefault('description', '')
+            metadata.setdefault('tagline', '')
+            metadata.setdefault('topics', ['IMPORTED'])
+            metadata.setdefault('nTokens', 0)
+            metadata.setdefault('lastActivityAt', datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"))
+
+            with open(f'static/{card_id}.json', 'w', encoding='utf-8') as f:
+                json.dump(metadata, f, indent=4)
+
+            generateGreyPlaceholder(card_id)
+
+            results.append({'success': True, 'filename': file.filename, 'cardId': card_id, 'type': 'json'})
+
+    return jsonify({'results': results})
+
 @app.route('/static/<path:filename>', methods=['GET'])
 def image(filename):
     return send_from_directory('static', filename)
@@ -185,7 +293,7 @@ def syncCards():
         return Response("data: {\"error\": \"Author name is required\"}\n\n", content_type='text/event-stream')
 
     totalCards, currCard, newCards = int(request.args.get('c', 500)), 0, 0
-    cardIds = sorted([int(file.split('.')[0]) for file in os.listdir('static') if file.lower().endswith('.png')], reverse=True)
+    cardIds = sorted([int(file.split('.')[0]) for file in os.listdir('static') if file.lower().endswith('.png') and not file.split('.')[0].startswith('IMPORT')], reverse=True)
 
     def dlCard(card):
         nonlocal newCards, currCard
@@ -245,16 +353,17 @@ def syncCards():
 
     return Response(genSyncData(), content_type='text/event-stream')
 
-@app.route('/delete_card/<int:cardId>', methods=['POST', 'DELETE'])
+@app.route('/delete_card/<cardId>', methods=['POST', 'DELETE'])
 def delete_card(cardId):
     try:
         deleteCard(cardId)
-        blacklistAdd(cardId)
+        if cardId.isdigit():
+            blacklistAdd(cardId)
         return jsonify({'message': 'Card deleted successfully'}), 200
     except Exception as e:
         return jsonify({'message': str(e)}), 500
 
-@app.route('/edit_tags/<int:cardId>', methods=['POST'])
+@app.route('/edit_tags/<cardId>', methods=['POST'])
 def edit_tags(cardId):
     try:
         newTags = request.form.get('tags')
@@ -266,7 +375,7 @@ def edit_tags(cardId):
     except Exception as e:
         return jsonify({'message': str(e)}), 500
 
-@app.route('/edit_card/<int:cardId>', methods=['POST'])
+@app.route('/edit_card/<cardId>', methods=['POST'])
 def edit_card(cardId):
     try:
         updates = request.get_json()
