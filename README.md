@@ -17,7 +17,7 @@ A self-hosted web app for browsing and downloading AI character cards from [chub
 
 ```bash
 # Install dependencies
-pip install flask requests Pillow
+pip install -r requirements.txt
 ```
 
 Dependencies explained:
